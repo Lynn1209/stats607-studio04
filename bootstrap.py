@@ -1,4 +1,6 @@
 import numpy as np
+
+
 def bootstrap_sample(data, compute_stat, n_bootstrap=1000):
     """
     Generate the bootstrap distribution of a statistic
@@ -32,7 +34,7 @@ def bootstrap_sample(data, compute_stat, n_bootstrap=1000):
     TBA
 
     """
-        # Check the inputs.
+    # Check the inputs.
     if not callable(compute_stat):
         raise TypeError("compute_stat must be callable")
 
@@ -63,6 +65,7 @@ def bootstrap_sample(data, compute_stat, n_bootstrap=1000):
 
     return bootstrap_stats
 
+
 def bootstrap_ci(bootstrap_stats, alpha=0.05):
     """
     Calculate a CI from bootstrap distribution
@@ -90,6 +93,20 @@ def bootstrap_ci(bootstrap_stats, alpha=0.05):
     TBA
     
     """
+    if not isinstance(alpha, (int, float, np.integer, np.floating)):
+        raise ValueError("alpha must be a number between 0 and 1")
+    if not 0 < alpha < 1:
+        raise ValueError("alpha must be between 0 and 1")
+
+    stats = np.asarray(bootstrap_stats)
+    if stats.size == 0:
+        raise ValueError("bootstrap_stats cannot be empty")
+
+    lower = np.percentile(stats, 100 * alpha / 2)
+    upper = np.percentile(stats, 100 * (1 - alpha / 2))
+
+    return float(lower), float(upper)
+
 
 def r_squared(data):
     """
@@ -110,3 +127,33 @@ def r_squared(data):
     ValueError
         If data doesn't have exactly 2 columns or < 2 rows
     """
+    values = np.asarray(data)
+
+    if values.ndim != 2 or values.shape[1] != 2:
+        raise ValueError("data must be a two-dimensional array with exactly 2 columns")
+    if values.shape[0] < 2:
+        raise ValueError("data must contain at least 2 rows")
+
+    try:
+        values = values.astype(float)
+    except (TypeError, ValueError) as error:
+        raise ValueError("data must contain numeric values") from error
+
+    if not np.all(np.isfinite(values)):
+        raise ValueError("data must contain only finite values")
+
+    x = values[:, 0]
+    y = values[:, 1]
+
+    design_matrix = np.column_stack((np.ones(len(x)), x))
+    coefficients, _, _, _ = np.linalg.lstsq(design_matrix, y, rcond=None)
+    fitted = design_matrix @ coefficients
+
+    residual_sum_squares = np.sum((y - fitted) ** 2)
+    total_sum_squares = np.sum((y - np.mean(y)) ** 2)
+
+    if np.isclose(total_sum_squares, 0):
+        return 1.0 if np.isclose(residual_sum_squares, 0) else 0.0
+
+    result = 1 - residual_sum_squares / total_sum_squares
+    return float(np.clip(result, 0.0, 1.0))
