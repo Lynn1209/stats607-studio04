@@ -115,3 +115,49 @@ def test_r_squared_two_rows():
 def test_r_squared_invalid_shape(data):
     with pytest.raises(ValueError):
         r_squared(data)
+
+# Student B: tests for bootstrap_sample.
+
+def test_bootstrap_sample_output():
+    data = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+
+    stats = bootstrap_sample(data, np.mean, n_bootstrap=100)
+
+    assert isinstance(stats, np.ndarray)
+    assert stats.shape == (100,)
+    assert np.all(np.isfinite(stats))
+
+
+def test_bootstrap_sample_one_replicate():
+    data = np.array([1.0, 2.0, 3.0])
+
+    stats = bootstrap_sample(data, np.mean, n_bootstrap=1)
+
+    assert stats.shape == (1,)
+
+
+def test_bootstrap_sample_empty_data():
+    with pytest.raises(ValueError):
+        bootstrap_sample(np.array([]), np.mean)
+
+
+@pytest.mark.parametrize("n_bootstrap", [0, -1, -10])
+def test_bootstrap_sample_invalid_n_bootstrap(n_bootstrap):
+    data = np.array([1.0, 2.0, 3.0])
+
+    with pytest.raises(ValueError):
+        bootstrap_sample(data, np.mean, n_bootstrap=n_bootstrap)
+
+
+def test_bootstrap_sample_wrong_shape():
+    data = np.ones((2, 2, 2))
+
+    with pytest.raises(ValueError):
+        bootstrap_sample(data, np.mean)
+
+
+def test_bootstrap_sample_noncallable_stat():
+    data = np.array([1.0, 2.0, 3.0])
+
+    with pytest.raises(TypeError):
+        bootstrap_sample(data, "mean")
