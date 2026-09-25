@@ -161,3 +161,57 @@ def test_bootstrap_sample_noncallable_stat():
 
     with pytest.raises(TypeError):
         bootstrap_sample(data, "mean")
+
+# Bonus: statistical validation against the null distribution of R-squared.
+def test_bootstrap_r_squared_null_distribution():
+    """
+    Compare a null-centered pairs bootstrap with the theoretical
+    Beta(1/2, (n-2)/2) distribution.
+
+    This is a large-sample approximation, not an exact finite-sample
+    distributional identity for the pairs bootstrap.
+    """
+    from scipy.stats import beta
+
+    rng = np.random.default_rng(607)
+    n = 5000
+    n_bootstrap = 4000
+
+    # Generate independent normal variables.
+    x = rng.normal(size=n)
+    y = rng.normal(size=n)
+
+    # Remove the observed linear association to impose the null.
+    x = x - x.mean()
+    y = y - y.mean()
+    y = y - x * np.dot(x, y) / np.dot(x, x)
+    data = np.column_stack((x, y))
+
+    # Make this test reproducible without changing other tests' RNG state.
+    random_state = np.random.get_state()
+    try:
+        np.random.seed(607)
+        stats = bootstrap_sample(
+            data, r_squared, n_bootstrap=n_bootstrap
+        )
+    finally:
+        np.random.set_state(random_state)
+
+    assert stats.shape == (n_bootstrap,)
+    assert np.all(np.isfinite(stats))
+    assert np.all((stats >= 0) & (stats <= 1))
+
+    # Compare the empirical CDF with the theoretical null CDF.
+    ordered = np.sort(stats)
+    theoretical_cdf = beta.cdf(ordered, 0.5, (n - 2) / 2)
+
+    empirical_upper = np.arange(1, n_bootstrap + 1) / n_bootstrap
+    empirical_lower = np.arange(n_bootstrap) / n_bootstrap
+
+    distance = max(
+        np.max(empirical_upper - theoretical_cdf),
+        np.max(theoretical_cdf - empirical_lower),
+    )
+
+    # Allow Monte Carlo error and finite-sample bootstrap approximation.
+    assert distance < 0.05, f"CDF distance is too large: {distance:.4f}"
