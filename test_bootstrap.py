@@ -35,83 +35,55 @@ def test_ci_percentiles():
     np.testing.assert_allclose(ci, (5.0, 95.0))
 
 
-def test_ci_default_alpha():
-    stats = np.arange(101, dtype=float)
-    ci = bootstrap_ci(stats)
+# Student B: tests for bootstrap_sample.
+def test_bootstrap_sample_happy_path():
+    """Return one finite statistic for each bootstrap replicate."""
+    np.random.seed(607)
+    stats = bootstrap_sample([1, 2, 3, 4], np.mean, n_bootstrap=50)
 
-    np.testing.assert_allclose(ci, (2.5, 97.5))
-
-
-def test_ci_constant_values():
-    ci = bootstrap_ci(np.array([5.0, 5.0, 5.0]))
-
-    np.testing.assert_allclose(ci, (5.0, 5.0))
-
-
-def test_ci_single_value():
-    ci = bootstrap_ci(np.array([3.0]))
-
-    np.testing.assert_allclose(ci, (3.0, 3.0))
+    assert isinstance(stats, np.ndarray)
+    assert stats.shape == (50,)
+    assert np.all(np.isfinite(stats))
+    assert np.all((stats >= 1) & (stats <= 4))
 
 
-def test_ci_empty():
+def test_bootstrap_sample_keeps_rows_together():
+    """Keep each x-y pair together when resampling two-dimensional data."""
+    data = np.array([[1, 10], [2, 20], [3, 30], [4, 40]])
+
+    def check_pairs(sample):
+        assert np.all(sample[:, 1] == 10 * sample[:, 0])
+        return np.mean(sample[:, 0])
+
+    np.random.seed(607)
+    stats = bootstrap_sample(data, check_pairs, n_bootstrap=20)
+
+    assert stats.shape == (20,)
+
+
+def test_bootstrap_sample_rejects_empty_data():
     with pytest.raises(ValueError):
-        bootstrap_ci(np.array([]))
+        bootstrap_sample([], np.mean)
 
 
-@pytest.mark.parametrize("alpha", [-0.1, 0, 1, 1.1])
-def test_ci_invalid_alpha(alpha):
+@pytest.mark.parametrize("n_bootstrap", [0, -1])
+def test_bootstrap_sample_rejects_invalid_replicates(n_bootstrap):
     with pytest.raises(ValueError):
-        bootstrap_ci(np.array([1.0, 2.0, 3.0]), alpha=alpha)
+        bootstrap_sample([1, 2, 3], np.mean, n_bootstrap=n_bootstrap)
 
 
-# Student A: tests for r_squared.
-@pytest.mark.parametrize("slope", [2.0, -2.0])
-def test_r_squared_perfect_line(slope):
-    x = np.arange(5, dtype=float)
-    data = np.column_stack((x, slope * x + 1))
-
-    result = r_squared(data)
-
-    assert isinstance(result, float)
-    assert result == pytest.approx(1.0)
+@pytest.mark.parametrize("n_bootstrap", [1.5, "10", True])
+def test_bootstrap_sample_rejects_noninteger_replicates(n_bootstrap):
+    with pytest.raises(TypeError):
+        bootstrap_sample([1, 2, 3], np.mean, n_bootstrap=n_bootstrap)
 
 
-def test_r_squared_zero():
-    # These nonconstant x and y values have zero covariance.
-    data = np.array([
-        [-1.0, 1.0],
-        [0.0, -2.0],
-        [1.0, 1.0],
-    ])
-
-    assert r_squared(data) == pytest.approx(0.0, abs=1e-10)
+def test_bootstrap_sample_rejects_noncallable_statistic():
+    with pytest.raises(TypeError):
+        bootstrap_sample([1, 2, 3], "mean")
 
 
-def test_r_squared_known_value():
-    # For regression with an intercept, R² = 0.75 here.
-    data = np.array([
-        [0.0, 0.0],
-        [1.0, 1.0],
-        [2.0, 1.0],
-    ])
-
-    assert r_squared(data) == pytest.approx(0.75)
-
-
-def test_r_squared_two_rows():
-    data = np.array([[0.0, 1.0], [1.0, 3.0]])
-
-    assert r_squared(data) == pytest.approx(1.0)
-
-
-@pytest.mark.parametrize("data", [
-    np.empty((0, 2)),
-    np.array([[1.0, 2.0]]),
-    np.ones((3, 1)),
-    np.ones((3, 3)),
-    np.array([1.0, 2.0, 3.0]),
-])
-def test_r_squared_invalid_shape(data):
+@pytest.mark.parametrize("bad_data", [5, np.zeros((2, 2, 2))])
+def test_bootstrap_sample_rejects_wrong_shape(bad_data):
     with pytest.raises(ValueError):
-        r_squared(data)
+        bootstrap_sample(bad_data, np.mean)
